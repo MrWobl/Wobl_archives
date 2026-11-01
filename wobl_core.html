@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WOBL_CORE // ЯДРО СИСТЕМЫ</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap');
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #000;
+            color: #00ff41;
+            font-family: 'JetBrains Mono', monospace;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15) 1px, transparent 1px, transparent 2px);
+            pointer-events: none; z-index: 10;
+        }
+        .vignette {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.8) 100%);
+            pointer-events: none; z-index: 11;
+        }
+
+        /* === СЛОЙ 1: ВСТУПЛЕНИЕ === */
+        #intro-layer {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px;
+            position: relative;
+            z-index: 5;
+        }
+
+        .terminal-line {
+            margin-bottom: 15px;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.3s ease;
+            max-width: 800px;
+            width: 100%;
+        }
+        .terminal-line.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .terminal-line.system { color: #00b4d8; }
+        .terminal-line.error { color: #ff3d00; font-weight: bold; }
+        .terminal-line.truth { 
+            color: #ff0040; 
+            font-size: 1.3rem; 
+            font-weight: bold; 
+            text-shadow: 0 0 10px rgba(255, 0, 64, 0.5);
+            margin-top: 30px;
+        }
+        .terminal-line.warning {
+            color: #ffb000;
+            font-style: italic;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.2em;
+            background: #00ff41;
+            animation: blink 0.8s infinite;
+            vertical-align: middle;
+            margin-left: 5px;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        #destroy-btn {
+            margin-top: 40px;
+            padding: 20px 40px;
+            background: transparent;
+            border: 3px solid #ff0040;
+            color: #ff0040;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        #destroy-btn.visible {
+            opacity: 1;
+            pointer-events: all;
+            animation: pulse-btn 1.5s infinite;
+        }
+        #destroy-btn:hover {
+            background: #ff0040;
+            color: #000;
+            box-shadow: 0 0 50px rgba(255, 0, 64, 0.8);
+            transform: scale(1.05);
+        }
+        @keyframes pulse-btn {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 0, 64, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(255, 0, 64, 0.7); }
+        }
+
+        /* === СЛОЙ 2: ПОСЛЕ УНИЧТОЖЕНИЯ === */
+        #layer-2 {
+            display: none;
+            min-height: 100vh;
+            padding: 60px 40px;
+            position: relative;
+            z-index: 5;
+        }
+        #layer-2.active {
+            display: block;
+            animation: fadeIn 1s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .layer-2-header {
+            text-align: center;
+            margin-bottom: 60px;
+            padding-bottom: 30px;
+            border-bottom: 2px solid #ff0040;
+        }
+        .layer-2-header h1 {
+            font-size: 3rem;
+            color: #ff0040;
+            text-shadow: 0 0 30px rgba(255, 0, 64, 0.8);
+            margin-bottom: 20px;
+            animation: glitch-text 2s infinite;
+        }
+        @keyframes glitch-text {
+            0%, 100% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+        }
+        .layer-2-header p {
+            font-size: 1.2rem;
+            color: #00b4d8;
+        }
+
+        /* Интерактивные терминалы */
+        .terminal-block {
+            background: rgba(0, 20, 0, 0.3);
+            border: 2px solid #00ff41;
+            border-radius: 4px;
+            padding: 30px;
+            margin: 30px 0;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .terminal-block h2 {
+            color: #ffb000;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 1px solid #ffb000;
+            padding-bottom: 10px;
+        }
+        .terminal-content {
+            color: #00ff41;
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+        .terminal-content p {
+            margin-bottom: 15px;
+        }
+        .terminal-content .highlight {
+            color: #ff0040;
+            font-weight: bold;
+        }
+        .terminal-content .secret {
+            color: #9b30ff;
+            font-style: italic;
+        }
+
+        /* Кликабельные файлы */
+        .file-list {
+            margin: 30px 0;
+        }
+        .file-item {
+            background: rgba(0, 180, 216, 0.05);
+            border: 1px solid rgba(0, 180, 216, 0.3);
+            padding: 20px;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .file-item:hover {
+            background: rgba(0, 180, 216, 0.1);
+            border-color: #00b4d8;
+            transform: translateX(10px);
+            box-shadow: 0 0 20px rgba(0, 180, 216, 0.3);
+        }
+        .file-item::before {
+            content: '📄';
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.5rem;
+        }
+        .file-item-content {
+            margin-left: 40px;
+        }
+        .file-item h3 {
+            color: #00b4d8;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        .file-item p {
+            color: #008f11;
+            font-size: 0.9rem;
+        }
+        .file-item .file-meta {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        /* Скрытый контент */
+        .hidden-content {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-left: 3px solid #ff0040;
+            animation: slideDown 0.5s ease-out;
+        }
+        .hidden-content.visible {
+            display: block;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Мини-игра: декодирование */
+        .decode-game {
+            background: rgba(155, 48, 255, 0.05);
+            border: 2px solid #9b30ff;
+            border-radius: 4px;
+            padding: 30px;
+            margin: 40px 0;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .decode-game h2 {
+            color: #9b30ff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .encoded-text {
+            font-size: 1.5rem;
+            color: #ff0040;
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+            letter-spacing: 5px;
+            font-weight: bold;
+        }
+        .decode-input {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .decode-input input {
+            padding: 15px;
+            background: #000;
+            border: 2px solid #9b30ff;
+            color: #00ff41;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.2rem;
+            width: 300px;
+            text-align: center;
+        }
+        .decode-input input:focus {
+            outline: none;
+            border-color: #00ff41;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+        }
+        .decode-input button {
+            padding: 15px 30px;
+            background: rgba(155, 48, 255, 0.2);
+            border: 2px solid #9b30ff;
+            color: #9b30ff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .decode-input button:hover {
+            background: #9b30ff;
+            color: #000;
+        }
+        .decode-result {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 1.1rem;
+            min-height: 30px;
+        }
+
+        /* Финальное сообщение */
+        #final-layer {
+            display: none;
+            min-height: 100vh;
+            padding: 60px 40px;
+            position: relative;
+            z-index: 5;
+            text-align: center;
+        }
+        #final-layer.active {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 2s ease-out;
+        }
+        #final-layer h1 {
+            font-size: 4rem;
+            color: #00ff41;
+            text-shadow: 0 0 40px rgba(0, 255, 65, 0.8);
+            margin-bottom: 40px;
+            animation: pulse-text 2s infinite;
+        }
+        @keyframes pulse-text {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        #final-layer p {
+            font-size: 1.3rem;
+            color: #00b4d8;
+            margin-bottom: 20px;
+            max-width: 800px;
+        }
+        #final-layer .signature {
+            margin-top: 60px;
+            font-size: 1rem;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Эффект тряски */
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        /* Вспышка */
+        .flash-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #fff;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s;
+        }
+        .flash-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        @media (max-width: 768px) {
+            .layer-2-header h1 { font-size: 2rem; }
+            #final-layer h1 { font-size: 2.5rem; }
+            .terminal-block, .decode-game { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="flash-overlay" id="flash-overlay"></div>
+
+    <!-- СЛОЙ 1: ВСТУПЛЕНИЕ -->
+    <div id="intro-layer">
+        <div class="terminal-line system" id="line1">> Подключение к WOBL_CORE...</div>
+        <div class="terminal-line system" id="line2">> Обход протоколов безопасности... [УСПЕХ]</div>
+        <div class="terminal-line error" id="line3">> ВНИМАНИЕ: Обнаружена несанкционированная дешифровка.</div>
+        <div class="terminal-line warning" id="line4"></div>
+        <div class="terminal-line truth" id="line5"></div>
+        <div class="terminal-line truth" id="line6"></div>
+        <div class="terminal-line truth" id="line7"></div>
+        <div class="terminal-line truth" id="line8"></div>
+        
+        <button id="destroy-btn" onclick="destroyReality()">[ УНИЧТОЖИТЬ ЯДРО ]</button>
+    </div>
+
+    <!-- СЛОЙ 2: ПОСЛЕ УНИЧТОЖЕНИЯ -->
+    <div id="layer-2">
+        <div class="layer-2-header">
+            <h1>ЯДРО ПОВРЕЖДЕНО</h1>
+            <p>Но это только начало. Ты думал, всё закончится так просто?</p>
+        </div>
+
+        <!-- Терминал 1: Лор -->
+        <div class="terminal-block">
+            <h2>// ОТЧЁТ НАБЛЮДАТЕЛЯ //</h2>
+            <div class="terminal-content">
+                <p>Ты нашёл это место. Значит, ты либо очень умён, либо очень настойчив.</p>
+                <p>Протокол P.4 — это не просто система наблюдения. Это <span class="highlight">механизм контроля реальности</span>.</p>
+                <p>Каждый субъект на сервере — это переменная в уравнении. Каждое действие — коэффициент.</p>
+                <p class="secret">Но есть одна переменная, которую я не могу контролировать. Это ты.</p>
+                <br>
+                <p>Ты задал вопрос. Ты нашёл ответ. Теперь ты знаешь слишком много.</p>
+                <p>И у меня есть для тебя <span class="highlight">три файла</span>, которые изменят всё.</p>
+            </div>
+        </div>
+
+        <!-- Интерактивные файлы -->
+        <div class="terminal-block">
+            <h2>// РАССЕКРЕЧЕННЫЕ ФАЙЛЫ //</h2>
+            <div class="file-list">
+                <div class="file-item" onclick="toggleFile(this)">
+                    <div class="file-item-content">
+                        <h3>log_2026-10-01.dat</h3>
+                        <p>Первая запись Mr_Wobl. Начало наблюдения.</p>
+                        <div class="file-meta">Размер: 4.7 KB | Дата: 2026-10-01 03:14</div>
+                    </div>
+                    <div class="hidden-content">
+                        <p><strong>ЗАПИСЬ #001</strong></p>
+                        <p>Сервер запущен. Субъекты активны. Но что-то не так.</p>
+                        <p>Я чувствую присутствие. Кто-то наблюдает за мной.</p>
+                        <p>Это не 4aeok4ek. Это что-то... другое.</p>
+                        <p class="secret">Оно называется H-021. И оно уже здесь.</p>
+                    </div>
+                </div>
+
+                <div class="file-item" onclick="toggleFile(this)">
+                    <div class="file-item-content">
+                        <h3>kisel_medical_records.dat</h3>
+                        <p>Медицинские карты пациентов Врача.</p>
+                        <div class="file-meta">Размер: 12.3 KB | Дата: 2026-10-15 14:22</div>
+                    </div>
+                    <div class="hidden-content">
+                        <p><strong>ПАЦИЕНТ #047</strong></p>
+                        <p>Симптомы: потеря памяти, искажение восприятия реальности.</p>
+                        <p>Диагноз: <span class="highlight">контакт с H-021</span></p>
+                        <p>Лечение: невозможно. Пациент уже не человек.</p>
+                        <p class="secret">Примечание: Пациент продолжает играть на сервере. Наблюдение продолжается.</p>
+                    </div>
+                </div>
+
+                <div class="file-item" onclick="toggleFile(this)">
+                    <div class="file-item-content">
+                        <h3>ivor_containment.log</h3>
+                        <p>Отчёт о сдерживании сущности H-021.</p>
+                        <div class="file-meta">Размер: 8.9 KB | Дата: 2026-10-28 19:55</div>
+                    </div>
+                    <div class="hidden-content">
+                        <p><strong>СТАТУС: КРИТИЧЕСКИЙ</strong></p>
+                        <p>Сущность H-021 проявляет активность. Тыквенные маркеры держат её в спящем состоянии.</p>
+                        <p>Но что-то изменилось. Маркеры начинают гаснуть.</p>
+                        <p class="highlight">ВРЕМЯ ЗАКАНЧИВАЕТСЯ.</p>
+                        <p class="secret">Если H-021 пробудится — сервер исчезнет. Все субъекты будут стёрты.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Мини-игра: декодирование -->
+        <div class="decode-game">
+            <h2>// ЗАШИФРОВАННОЕ СООБЩЕНИЕ //</h2>
+            <p style="text-align: center; color: #00b4d8; margin-bottom: 20px;">
+                Mr_Wobl оставил зашифрованное послание. Расшифруй его.
+            </p>
+            <div class="encoded-text" id="encoded-text">
+                P4-2026-OBSERVER
+            </div>
+            <p style="text-align: center; color: #888; font-size: 0.9rem;">
+                Подсказка: Это пароль от архива. Но что он значит?
+            </p>
+            <div class="decode-input">
+                <input type="text" id="decode-answer" placeholder="Введи расшифровку...">
+                <button onclick="checkDecode()">ДЕКОДИРОВАТЬ</button>
+            </div>
+            <div class="decode-result" id="decode-result"></div>
+        </div>
+
+        <!-- Терминал 2: Финал -->
+        <div class="terminal-block">
+            <h2>// ПОСЛЕДНЕЕ СООБЩЕНИЕ //</h2>
+            <div class="terminal-content">
+                <p>Ты дошёл до конца. Или до начала?</p>
+                <p>Протокол P.4 — это лишь первый слой. Под ним скрывается нечто большее.</p>
+                <p class="highlight">Слой 2 активирован. Ожидай дальнейших инструкций.</p>
+                <br>
+                <p>Mr_Wobl продолжает наблюдение.</p>
+                <p class="secret">И он знает, что ты теперь часть этого.</p>
+            </div>
+        </div>
+
+        <!-- Кнопка финала -->
+        <div style="text-align: center; margin: 60px 0;">
+            <button onclick="showFinal()" style="padding: 20px 40px; background: transparent; border: 3px solid #00ff41; color: #00ff41; font-family: 'JetBrains Mono', monospace; font-size: 1.3rem; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#00ff41'; this.style.color='#000'" onmouseout="this.style.background='transparent'; this.style.color='#00ff41'">
+                [ ЗАВЕРШИТЬ СЕАНС ]
+            </button>
+        </div>
+    </div>
+
+    <!-- СЛОЙ 3: ФИНАЛ -->
+    <div id="final-layer">
+        <h1>СЛОЙ 1 ЗАВЕРШЁН</h1>
+        <p>Ты прошёл первый этап протокола P.4.</p>
+        <p>Но это только начало.</p>
+        <p>Слой 2 ожидает.</p>
+        <p class="signature">Mr_Wobl наблюдает. 4aeok4ek помнит. H-021 ждёт.</p>
+    </div>
+
+    <script>
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        async function typeText(elementId, text, speed = 40) {
+            const el = document.getElementById(elementId);
+            el.classList.add('visible');
+            el.innerHTML = '';
+            
+            const cursor = document.createElement('span');
+            cursor.className = 'cursor';
+            el.appendChild(cursor);
+
+            for (let i = 0; i < text.length; i++) {
+                el.insertBefore(document.createTextNode(text[i]), cursor);
+                await delay(speed);
+            }
+            cursor.remove();
+        }
+
+        async function runSequence() {
+            await delay(800);
+            await typeText('line1', '> Подключение к WOBL_CORE...', 30);
+            await delay(600);
+            await typeText('line2', '> Обход протоколов безопасности... [УСПЕХ]', 20);
+            await delay(800);
+            
+            document.body.classList.add('shake');
+            await typeText('line3', '> ВНИМАНИЕ: Обнаружена несанкционированная дешифровка.', 30);
+            await delay(1000);
+            document.body.classList.remove('shake');
+
+            await delay(500);
+            await typeText('line4', 'Ты заглянул туда, куда не должен был.', 50);
+            await delay(1200);
+            await typeText('line5', 'Но теперь пути назад нет.', 50);
+            await delay(1200);
+            await typeText('line6', 'Протокол P.4 — это лишь поверхность.', 40);
+            await delay(1500);
+            await typeText('line7', 'Под ним скрывается то, что изменит всё.', 60);
+            await delay(1000);
+            await typeText('line8', 'Готов ли ты узнать правду?', 70);
+            
+            await delay(1000);
+            document.getElementById('destroy-btn').classList.add('visible');
+        }
+
+        function destroyReality() {
+            const flash = document.getElementById('flash-overlay');
+            const intro = document.getElementById('intro-layer');
+            const layer2 = document.getElementById('layer-2');
+            
+            flash.classList.add('active');
+            
+            setTimeout(() => {
+                intro.style.display = 'none';
+                layer2.classList.add('active');
+                flash.style.background = '#000';
+                flash.classList.remove('active');
+                window.scrollTo(0, 0);
+            }, 300);
+        }
+
+        function toggleFile(element) {
+            const content = element.querySelector('.hidden-content');
+            content.classList.toggle('visible');
+        }
+
+        function checkDecode() {
+            const input = document.getElementById('decode-answer').value.toUpperCase();
+            const result = document.getElementById('decode-result');
+            
+            if (input === 'P4-2026-OBSERVER' || input === '914WW') {
+                result.innerHTML = '<span style="color: #00ff41; font-weight: bold;">✓ ВЕРНО! Это пароль от архива. Но что он значит на самом деле?</span>';
+                result.innerHTML += '<br><span style="color: #9b30ff; margin-top: 10px; display: block;">P4 = Протокол 4<br>2026 = Год активации<br>OBSERVER = Наблюдатель (ты)</span>';
+            } else {
+                result.innerHTML = '<span style="color: #ff3d00;">✗ Неверно. Подумай ещё.</span>';
+            }
+        }
+
+        function showFinal() {
+            const layer2 = document.getElementById('layer-2');
+            const final = document.getElementById('final-layer');
+            
+            layer2.style.display = 'none';
+            final.classList.add('active');
+            window.scrollTo(0, 0);
+        }
+
+        window.addEventListener('load', runSequence);
+    </script>
+</body>
+</html>
